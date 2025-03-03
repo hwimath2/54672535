@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>휘매쓰 연산 챌린지!</title>
+  <!-- MathJax for 수식 렌더링 -->
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+  </script>
+  <style>
+    body {
+      margin: 0; padding: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #ffffff, #f2f2f2);
+      color: #333;
+    }
+    header, main, footer {
+      max-width: 800px; margin: auto; padding: 1rem;
+    }
+    header h1 {
+      text-align: center;
+      color: #333;
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    .difficulty-select, .name-input {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .difficulty-select button {
+      margin: 0.5rem;
+      padding: 0.5rem 1rem;
+      border: none; border-radius: 4px;
+      font-size: 1rem; cursor: pointer;
+      transition: background 0.3s;
+    }
+    .difficulty-select button:hover {
+      background: #ddd;
+    }
+    #quiz-container, #final-result {
+      text-align: center;
+      margin-top: 2rem;
+    }
+    .energy-bar-container {
+      width: 60%;
+      height: 20px;
+      background-color: #ccc;
+      margin: 0.5rem auto;
+      border-radius: 10px;
+      position: relative;
+    }
+    .energy-bar {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      background-color: #ff6666;
+      width: 100%;
+      border-radius: 10px;
+      transition: width 1s linear;
+    }
+    .info-panel {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 1rem;
+      font-size: 1.1rem;
+    }
+    .question {
+      font-size: 1.5rem;
+      margin: 2rem 0 1rem 0;
+    }
+    .answer-input {
+      font-size: 1rem;
+      padding: 0.4rem;
+      width: 100px;
+      text-align: center;
+    }
+    .submit-btn {
+      margin-left: 0.5rem;
+      padding: 0.4rem 0.8rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .result-msg {
+      margin-top: 1rem;
+      font-weight: bold;
+      min-height: 2rem;
+    }
+    footer {
+      text-align: center;
+      margin-top: 4rem;
+      color: #777;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>휘매쓰 연산 챌린지!</h1>
+    <!-- 이름 입력란 추가 -->
+    <div class="name-input">
+      <input type="text" id="user-name" placeholder="이름을 입력하세요" />
+    </div>
+    <div class="difficulty-select">
+      <p>난이도를 선택하세요</p>
+      <button onclick="startGame('hardest')">최상 (20초, +20점)</button>
+      <button onclick="startGame('hard')">상 (30초, +15점)</button>
+      <button onclick="startGame('medium')">중 (40초, +13점)</button>
+      <button onclick="startGame('easy')">하 (시간제한 없음, +10점)</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- 퀴즈 영역 -->
+    <div id="quiz-container" style="display:none;">
+      <!-- 에너지 바 -->
+      <div class="energy-bar-container">
+        <div class="energy-bar" id="energy-bar"></div>
+      </div>
+
+      <!-- 정보 패널(남은 기회, 총 시간, 점수) -->
+      <div class="info-panel">
+        <div id="lives-info">남은 기회: 3</div>
+        <div id="total-time-info">총 게임 시간: 0초</div>
+        <div id="score-info">점수: 0</div>
+      </div>
+
+      <!-- 문제 표시 영역 -->
+      <div class="question" id="question-area"></div>
+      <div>
+        <input type="text" class="answer-input" id="answer-input" placeholder="답 입력" />
+        <button class="submit-btn" onclick="submitAnswer()">확인</button>
+      </div>
+      <div class="result-msg" id="result-msg"></div>
+    </div>
+
+    <!-- 게임 종료 후 결과 및 서버 전송 영역 -->
+    <div id="final-result" style="display:none;">
+      <p id="final-score"></p>
+      <p id="final-time"></p>
+      <button id="send-button" onclick="sendGameData()">전송하기</button>
+      <div id="response" style="margin-top: 1rem; white-space: pre-wrap;"></div>
+    </div>
+  </main>
+
+  <footer>
+    &copy; 2023 휘매쓰 연산 챌린지!
+  </footer>
+
+  <script>
+    /******************************************************************
+     * 1. 문제 데이터 (총 70문제)
+     ******************************************************************/
+    const problemSet = [
+      { q: "0.8 ÷ 2",    a: "0.4" },
+      { q: "3.12 ÷ 4",   a: "0.78" },
+      { q: "12.25 ÷ 7",  a: "1.75" },
+      { q: "2.5 ÷ 5",    a: "0.5" },
+      { q: "6.4 ÷ 8",    a: "0.8" },
+      { q: "0.125 ÷ 8",  a: "0.015625" },
+      { q: "1.75 ÷ 7",   a: "0.25" },
+      { q: "3.75 ÷ 15",  a: "0.25" },
+      { q: "5.2 ÷ 4",    a: "1.3" },
+      { q: "4.8 ÷ 16",   a: "0.3" },
+      // ... (이하 60문제 생략)
+    ];
+
+    /******************************************************************
+     * 전역 변수
+     ******************************************************************/
+    let shuffledProblems = [];
+    let currentIndex = 0;
+    let score = 0;
+    let lives = 3;
+    let totalGameTime = 0;
+    let gameTimer;
+    let timeLimitTimer;
+    let difficulty = "easy";
+    let timeLimit = Infinity;
+    let energyBarWidth = 100;
+
+    // 난이도별 점수 및 시간
+    const difficultyScores = {
+      "hardest": 20,
+      "hard": 15,
+      "medium": 13,
+      "easy": 10
+    };
+    const difficultyTime = {
+      "hardest": 20,
+      "hard": 30,
+      "medium": 40,
+      "easy": Infinity
+    };
+
+    /******************************************************************
+     * 유틸 함수: 배열 섞기 (Fisher-Yates)
+     ******************************************************************/
+    function shuffleArray(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function startGame(selectedDifficulty) {
+      const userName = document.getElementById("user-name").value.trim();
+      if (!userName) {
+        alert("게임을 시작하기 전에 이름을 입력해주세요.");
+        return;
+      }
+      difficulty = selectedDifficulty;
+      timeLimit = difficultyTime[difficulty];
+      score = 0;
+      lives = 3;
+      totalGameTime = 0;
+      currentIndex = 0;
+
+      shuffledProblems = shuffleArray(problemSet.slice());
+
+      document.getElementById("lives-info").textContent = "남은 기회: " + lives;
+      document.getElementById("score-info").textContent = "점수: " + score;
+      document.getElementById("total-time-info").textContent = "총 게임 시간: 0초";
+
+      // 퀴즈 영역 표시, 시작 전 이름 및 난이도 선택 영역은 숨김
+      document.getElementById("quiz-container").style.display = "block";
+      document.querySelector(".difficulty-select").style.display = "none";
+      document.querySelector(".name-input").style.display = "none";
+
+      clearInterval(gameTimer);
+      gameTimer = setInterval(() => {
+        totalGameTime++;
+        document.getElementById("total-time-info").textContent = "총 게임 시간: " + totalGameTime + "초";
+      }, 1000);
+
+      showNextProblem();
+    }
+
+    function showNextProblem() {
+      if (currentIndex >= shuffledProblems.length) {
+        currentIndex = 0;
+        shuffledProblems = shuffleArray(problemSet.slice());
+      }
+      const problem = shuffledProblems[currentIndex];
+      document.getElementById("question-area").innerHTML = `\\(${problem.q} = \\; ?\\)`;
+      document.getElementById("answer-input").value = "";
+      document.getElementById("result-msg").textContent = "";
+
+      if (window.MathJax) {
+        window.MathJax.typesetPromise();
+      }
+
+      energyBarWidth = 100;
+      document.getElementById("energy-bar").style.width = energyBarWidth + "%";
+
+      clearInterval(timeLimitTimer);
+      if (timeLimit !== Infinity) {
+        let timeLeft = timeLimit;
+        timeLimitTimer = setInterval(() => {
+          timeLeft--;
+          energyBarWidth = (timeLeft / timeLimit) * 100;
+          document.getElementById("energy-bar").style.width = energyBarWidth + "%";
+
+          if (timeLeft <= 0) {
+            clearInterval(timeLimitTimer);
+            loseLifeAndNext("시간 초과! (기회 1 감소)");
+          }
+        }, 1000);
+      } else {
+        document.getElementById("energy-bar").style.width = "100%";
+      }
+    }
+
+    function submitAnswer() {
+      const userAnswer = document.getElementById("answer-input").value.trim();
+      if (!userAnswer) return;
+
+      const problem = shuffledProblems[currentIndex];
+      const correctAnswer = problem.a;
+
+      if (userAnswer === correctAnswer) {
+        score += difficultyScores[difficulty];
+        document.getElementById("score-info").textContent = "점수: " + score;
+        document.getElementById("result-msg").textContent = "정답!";
+      } else {
+        document.getElementById("result-msg").textContent = `오답! 정답은 ${correctAnswer} 입니다.`;
+        loseLifeAndNext();
+        return;
+      }
+      currentIndex++;
+      setTimeout(showNextProblem, 1000);
+    }
+
+    function loseLifeAndNext(msg) {
+      if (msg) {
+        document.getElementById("result-msg").textContent = msg;
+      }
+      lives--;
+      document.getElementById("lives-info").textContent = "남은 기회: " + lives;
+      if (lives <= 0) {
+        endGame();
+      } else {
+        currentIndex++;
+        setTimeout(showNextProblem, 1500);
+      }
+    }
+
+    // 게임 종료 후 결과 화면을 표시하는 함수
+    function endGame() {
+      clearInterval(gameTimer);
+      clearInterval(timeLimitTimer);
+      // 퀴즈 영역 숨김, 최종 결과 영역 표시
+      document.getElementById("quiz-container").style.display = "none";
+      document.getElementById("final-score").innerText = "최종 점수: " + score;
+      document.getElementById("final-time").innerText = "경과시간: " + totalGameTime + "초";
+      document.getElementById("final-result").style.display = "block";
+    }
+
+    // 서버에 데이터를 전송하는 함수 (async/await 사용)
+    async function saveData(game, name, score, elapsedTime) {
+      const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+      const requestData = {
+          game,
+          name,
+          score: parseInt(score, 10),
+          elapsedTime: parseInt(elapsedTime, 10)
+      };
+
+      try {
+        const response = await fetch(FUNCTION_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestData)
+        });
+        const responseData = await response.json();
+
+        if (response.ok) {
+          document.getElementById('response').innerText = `성공: ${JSON.stringify(responseData, null, 2)}`;
+        } else {
+          document.getElementById('response').innerText = `오류: ${JSON.stringify(responseData, null, 2)}`;
+        }
+      } catch (error) {
+        console.error('요청 실패:', error);
+        document.getElementById('response').innerText = `네트워크 오류: ${error.message}`;
+      }
+    }
+
+    // 전송 버튼 클릭 시 호출되는 함수
+    function sendGameData() {
+      const name = document.getElementById('user-name').value;
+      if (!name) {
+        alert('이름을 입력해주세요.');
+        return;
+      }
+      const gameTitle = "휘매쓰 연산 챌린지!";
+      saveData(gameTitle, name, score, totalGameTime);
+    }
+  </script>
+</body>
+</html>
